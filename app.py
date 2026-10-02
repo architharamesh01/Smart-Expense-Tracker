@@ -2,27 +2,44 @@ import streamlit as st
 import json
 import os
 
-# ---------------- PAGE ----------------
+# ---------------- PAGE SETTINGS ----------------
 
 st.set_page_config(
     page_title="Smart Expense Tracker",
-    page_icon="💰"
+    page_icon="💰",
+    layout="centered"
 )
 
-# ---------------- SAVE FILE ----------------
+# ---------------- FILE ----------------
 
 file_name = "expenses.json"
 
+# ---------------- LOAD SAVED DATA ----------------
 
-# Load saved expenses
 if os.path.exists(file_name):
 
-    with open(file_name, "r") as file:
-        expenses = json.load(file)
+    try:
+        with open(file_name, "r") as file:
+            data = json.load(file)
+
+        # New format
+        if isinstance(data, dict):
+            expenses = data.get("expenses", [])
+            saved_budget = data.get("budget", 10000)
+
+        # Old format (if your existing file only contains expenses)
+        else:
+            expenses = data
+            saved_budget = 10000
+
+    except:
+        expenses = []
+        saved_budget = 10000
 
 else:
 
     expenses = []
+    saved_budget = 10000
 
 
 # ---------------- TITLE ----------------
@@ -40,8 +57,34 @@ st.header("🎯 Monthly Budget")
 budget = st.number_input(
     "Enter your monthly budget (₹)",
     min_value=0,
-    value=10000
+    value=int(saved_budget),
+    step=100
 )
+
+
+# ---------------- SAVE DATA FUNCTION ----------------
+
+def save_data():
+    data = {
+        "budget": budget,
+        "expenses": expenses
+    }
+
+    with open(file_name, "w") as file:
+        json.dump(data, file, indent=4)
+
+
+# ---------------- SAVE BUDGET ----------------
+
+if budget != saved_budget:
+
+    data = {
+        "budget": budget,
+        "expenses": expenses
+    }
+
+    with open(file_name, "w") as file:
+        json.dump(data, file, indent=4)
 
 
 # ---------------- ADD EXPENSE ----------------
@@ -50,7 +93,8 @@ st.header("➕ Add Expense")
 
 amount = st.number_input(
     "Amount (₹)",
-    min_value=0
+    min_value=0,
+    step=10
 )
 
 category = st.selectbox(
@@ -79,8 +123,9 @@ payment = st.selectbox(
 )
 
 
-# Add button
-if st.button("Add Expense"):
+# ---------------- ADD BUTTON ----------------
+
+if st.button("Add Expense", use_container_width=True):
 
     if amount > 0:
 
@@ -93,9 +138,7 @@ if st.button("Add Expense"):
 
         expenses.append(new_expense)
 
-        # Save expenses
-        with open(file_name, "w") as file:
-            json.dump(expenses, file)
+        save_data()
 
         st.success("Expense added! ✅")
 
@@ -106,13 +149,12 @@ if st.button("Add Expense"):
         st.warning("Please enter an amount.")
 
 
-# ---------------- TOTAL ----------------
+# ---------------- CALCULATE TOTAL ----------------
 
 total = 0
 
 for expense in expenses:
-
-    total = total + expense["amount"]
+    total += expense["amount"]
 
 
 remaining = budget - total
@@ -130,21 +172,21 @@ with col1:
 
     st.metric(
         "💰 Total Spent",
-        f"₹{total}"
+        f"₹{total:,.0f}"
     )
 
 with col2:
 
     st.metric(
         "🎯 Budget",
-        f"₹{budget}"
+        f"₹{budget:,.0f}"
     )
 
 with col3:
 
     st.metric(
         "💵 Remaining",
-        f"₹{remaining}"
+        f"₹{remaining:,.0f}"
     )
 
 
@@ -163,34 +205,48 @@ else:
 
     for i, expense in enumerate(expenses):
 
-        st.write(
-            f"**₹{expense['amount']}**  |  "
-            f"{expense['category']}  |  "
-            f"{expense['date']}  |  "
-            f"{expense['payment']}"
-        )
+        col1, col2 = st.columns([5, 1])
 
-        # Delete button
-        if st.button("🗑️ Delete", key=i):
+        with col1:
 
-            expenses.pop(i)
+            st.write(
+                f"**₹{expense['amount']:,.0f}**  |  "
+                f"{expense['category']}  |  "
+                f"{expense['date']}  |  "
+                f"{expense['payment']}"
+            )
 
-            with open(file_name, "w") as file:
-                json.dump(expenses, file)
+        with col2:
 
-            st.rerun()
+            if st.button("🗑️", key=f"delete_{i}"):
+
+                expenses.pop(i)
+
+                save_data()
+
+                st.rerun()
 
 
 # ---------------- BUDGET WARNING ----------------
 
-if total > budget and budget > 0:
+st.divider()
 
-    st.error("⚠️ You have exceeded your monthly budget!")
+if budget > 0:
 
-elif budget > 0 and total >= budget * 0.8:
+    if total > budget:
 
-    st.warning("⚠️ You have used more than 80% of your budget.")
+        st.error(
+            "⚠️ You have exceeded your monthly budget!"
+        )
 
-else:
+    elif total >= budget * 0.8:
 
-    st.success("✅ You are within your budget.")
+        st.warning(
+            "⚠️ You have used more than 80% of your budget."
+        )
+
+    else:
+
+        st.success(
+            "✅ You are within your budget."
+        )
